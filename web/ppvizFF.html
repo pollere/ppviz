@@ -1,0 +1,86 @@
+<!DOCTYPE html> <html>
+<head lang="en">
+   <meta charset="utf-8">
+   <title>Passive Ping Delay Topology</title>
+   <link rel = "stylesheet" href = "ppviz.css">
+   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+
+<body>
+
+<div id="header" style="background:#3cb371; margin: 5 5 5 5">
+    <div class="hdr">
+        <div class="hleft">
+	        <label id="dateTime"> </label>
+            <input type="file" id="inFile">
+            <button id="runMode" onclick="setRunMode();">animate</button>
+            <button id="nextButton" onclick="ppvizManager();">next</button>
+            <label id="runStatus" style="margin: 10px 0 5px 2px">Choose a File</label>
+        </div>
+        <div class="hcenter">
+	        <label id="intSummary">Capturing ppings over the update interval</label>
+	        <label id="dwStatus">display width autoscaled (zoom sets manual)</label>
+                <button id="dwAuto" style="visibility:hidden" onclick="autoScaleOn();">autoscale</button>
+                <button id="helper" onclick="toggleGuide();">hide guide</button>
+        </div>
+        <div class="hright">
+            <div>min display update (sec): <input type="text" id="updateInt" value="1">
+            </div>
+            <div>short-term box plots (and stripchart width) (sec): <input type="text" id="boxHist" value="10">
+            </div>
+            <div>sample storage history (sec): <input type="text" id="sampStore" value="600" style="width:3em">
+            </div>
+            <div>
+            <button id="defaultStreams" onclick="defaultList();">use default stream list</button>
+            <button id="streamToggle" onclick="popStreamList();">show stream list</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="map" class="svgContainer">
+</div>
+
+<div id="resizer" style="cursor: pointer">
+</div>
+<div id="guide">
+  <div id="guideText">
+	<b>Guide</b>
+	<li>Choose a file of output lines created by running <em>pping -m</em>.</li>
+	<li>Set minimum display update, short-term (yellow) box plot (statistics update) interval, and length of sample history at upper right.</li>
+	<li>Starts in step mode; click "next" to step to next statistics time.</li>
+	<li>Animate free-runs proportional to real time divided by 10.</li>
+	<li>Horizontal box plots show CP-to-host RTT quantiles.</li>
+    <li> Yellow box is Q1 to Q3 for the recent statistics interval with blue vertical line showing median, annotated with value in ms.</li>
+	<li>Gray box plots show long-term RTT tdigest quantiles with whiskers that show 5th and 95th percentiles and black dots that show the minimum RTT <em>ever</em> seen.
+</li>
+	<li>Streams with the most samples are displayed by default, but a pop up menu allows selection.</li>
+	<li>Number of flow samples in most recent statistics interval annotated in gray along sides.</li>
+	<li>Click on box lane to display data in a strip chart; click chart's closer to remove.</li>
+	<li>Solid gray line under boxes can be dragged to change relative size of box and stripchart areas.</li>
+  </div>
+</div>
+
+<div id="popup" class="hdr">
+  <div id="plot" class="hleft">
+  </div>
+  <div id="closer" class="hright">
+  </div>
+</div>
+
+<!-- load the d3.js library -->    
+<script src="http://d3js.org/d3.v4.min.js"></script>
+
+<script>
+d3.select("#inFile").on("change", function() {processInputFile(this.files); });
+d3.select("#updateInt").on("input", function() {changeInterval(+this.value); });
+d3.select("#boxHist").on("input", function() {changeBoxHist(+this.value); });
+d3.select("#sampStore").on("input", function() {changePtHist(+this.value); });
+</script>
+
+<footer style="clear: left; background:#3cb371; text-align: center"><small>Copyright &copy 2017 Pollere, Inc. All Rights Reserved.</small></footer>
+
+<script src="ppviz.js"></script>
+
+</body>
+</html>

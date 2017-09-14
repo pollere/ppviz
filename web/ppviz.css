@@ -1,0 +1,95 @@
+body {
+	font-family: Helvetica Neue, sans-serif;
+}
+header {
+	font-family: sans-serif;
+    	font-size: small;
+    	line-height: 1;
+}
+div#guide {
+	font-size: 80%;
+	margin: 5 0 5 5;
+	border-top: 0px solid;
+	background:#f5fffa;
+	padding-bottom: 2px;
+}
+.axis path,
+.axis line {
+    	fill: none;
+    	stroke: black;
+	opacity: .2;
+}
+.axis text {
+    font-family: sans-serif;
+    font-size: 12px;
+}
+
+.svgContainer {
+    display: inline-block;
+    position: relative;
+    width: 100%;
+    vertical-align: top;
+    overflow: hidden;
+}
+.svgContent {
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+div.hdr {
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: space-between;
+  align-content: center;
+  align-items: center;
+  padding: 2px 2px
+}
+div.hleft {
+  order: 1;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: space-between;
+  align-content: center;
+  align-items: flex-start;
+}
+div.hcenter {
+  order: 2;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: space-between;
+  align-content: center;
+  align-items: center;
+  font-size: 12pt;
+}
+div.hright {
+  order: 3;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: space-between;
+  align-content: center;
+  align-items: flex-end;
+  font-size: 12pt;
+}
+#runMode, #nextButton {
+    width: 7em;
+    margin: 1;
+    padding: 0;
+}
+#lanesDisp, #updateInt, #boxHist {
+  width: 1.5em;
+}
+div#map {
+    clear: left;
+    background: transparent;
+}
+label#intSummary {
+	font-family: Helvetica, san-serif;
+	margin-bottom: 10px;
+}
+
+#footer{
+    margin-left: 200px;
+	font-family: Helvetica, san-serif;
+    font-size: 14px;
+}
