@@ -48,7 +48,6 @@ let dispCnt = +0, dispInt = 0.;
 let intervalLabel, dateLabel;
 let windowHt;
 let sleepTm = +0.;     //in ms, use in freeRun/animation
-const statHistSelections = [];
 const dispList = [];
 const unDispList = [];
 let selectStreams = false;      //indicator for a sorted dispList or check box selected
@@ -879,7 +878,7 @@ function mungeData(endtm) {
     for (let k in flows) {    
         //only flows active this stats interval in sts
         if(!sts[k]) {
-            flows[k].pts = +0;
+            flows[k].pts *= 0.5;
             flows[k].q = [0,0,0,0,0];
             if(laneNo[k]) {
                 let n = revFlow(k);
@@ -894,9 +893,15 @@ function mungeData(endtm) {
             continue;
         if (flows[k].side === 0)
             flows[k].side = srcSide(flows[k].src, flows[k].dst);
-        let c = sts[k].size();	//number of points in this interval
+       //ewma of number of points in this interval
+        let c = flows[k].pts;
+        if(c > 0)
+            c = 0.5*(sts[k].size() + flows[k].pts);
+        else
+            c = sts[k].size();
+        c = Math.round(c);
+        flows[k].pts = c;
 	    dispCnt += c;
-	    flows[k].pts = c;
         cntd[k] = 1;
         //have to save this information in case of redraws
         flows[k].q = [
@@ -910,12 +915,20 @@ function mungeData(endtm) {
         let n = revFlow(k);
         if (!flows[n] || !sts[n]) {
             cntVal.push({
-                c: +c,
+                c: c,
                 n: k
             });
             continue;
         }
-        c += sts[n].size();	//add number of interval points of rev flow
+        //add number of interval points of rev flow
+        let cr = flows[n].pts;
+        if(cr > 0)
+            cr = 0.5*(sts[n].size() + cr);
+        else
+            cr = sts[n].size();
+        cr = Math.round(cr);
+        flows[n].pts = cr;
+        dispCnt += cr;
 	    dispCnt += sts[n].size();
 	    flows[n].pts = sts[n].size();
         flows[n].q = [
@@ -925,9 +938,10 @@ function mungeData(endtm) {
             sts[n].percentile(0.75),
             sts[n].percentile(0.95)
             ];
+        c += cr;        //pts in stream
         cntd[n] = 1;
         	cntVal.push({
-            	c: +c,
+            	c: c,
             	n: k
         	});
         if (flows[n].side === 0)
@@ -1592,6 +1606,11 @@ function popStreamList() {
 }
 
 function defaultList() {
+    if (listPopup && !listPopup.empty()) {
+        listPopup.selectAll("*").remove();
+        listPopup.remove();
+        listPopup = null;
+    }
     selectStreams = false;
     assignLanes();
     computeLaneBoxes();
