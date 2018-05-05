@@ -12,7 +12,7 @@
   <div class="hdr">
     <div class="hleft">
       <label id="dateTime"> </label>
-      <label id="runStatus" style="margin: 10px 0 5px 2px">Opening Websocket</label>
+      <label id="runStatus" style="margin: 10px 0 5px 2px">Ready to connect Websocket</label>
     </div>
     <div class="hcenter">
 	    <label id="intSummary">Capturing ppings over the update interval</label>
@@ -44,18 +44,16 @@
 <div id="guide">
   <div id="guideText">
        <b>Guide</b>
-	<li>Displaying live feed from command-line <em>pping</em> command.</li>
-	<li>Set display interval, statistics and sample histories at upper right.</li>
-    <li>In upper right, sset display interval, statistics update interval, time covered by short term boxes and length of sample history.</li>
+	<li>Displaying live feed from command-line <em>pping -i interface -m</em> command.</li>
+	<li>Set minimum display update, short-term (yellow) box plot (statistic update) interval, and length of sample history at upper right.</li>
     <li>Horizontal box plots show CP-to-host RTT quantiles.</li>
-    <li> Yellow box is Q1 to Q3 for the indicated recent short term with blue vertical line showing median, annotated with value in ms.</li>
+    <li> Yellow box is Q1 to Q3 for the recent short term with blue vertical line showing median, annotated with value in ms.</li>
     <li>Gray box plots show long-term RTT tdigest quantiles with whiskers that show 5th and 95th percentiles and black dots that show the minimum RTT <em>ever</em> seen.
 </li>
     <li>Streams with the most samples are displayed by default, but a pop up menu allows selection.</li>
-    <li>Number of flow samples in most recent stat interval annotated in gray along sides.</li>
+    <li>Number of flow samples in most recent statistics interval annotated in gray along sides.</li>
 	<li>Click on box lane to display data in a strip chart; click closer to remove its strip chart.</li>
 	<li>Solid gray line under boxes can be dragged to change relative size of box and stripchart areas.</li>
- <li>sample history is max age of samples, update interval is min update (for strip charts), box update is how often boxes are updated, box history is time span of box plot points.</li>
   </div>
 </div>
 
@@ -75,12 +73,34 @@ d3.select("#boxHist").on("input", function() {changeBoxHist(+this.value); });
 d3.select("#sampStore").on("input", function() {changePtHist(+this.value); });
 </script>
 
-<footer style="clear: left; background:#3cb371; text-align: center"><small>Copyright &copy 2017 Pollere, Inc. All Rights Reserved.</small></footer>
+<footer style="clear: left; background:#3cb371; text-align: center"><small>Copyright &copy 2018 Pollere, Inc. All Rights Reserved.</small></footer>
 
 <script src="ppviz.js"></script>
 <script type="text/javascript">
-    ppvizClient({ handleLine: ppLine });
-    setDisplayTimer();
+    toggleGuide();      //pop guide up for live
+    let conn = new WebSocket("ws://127.0.0.1:8080");
+    let chunkInterval = getInterval();
+    conn.onopen = function () {
+        d3.select("#runStatus").text("Opened pipe connection");
+        let msg = "timespan " + (chunkInterval * 1000).toString();
+        conn.send(msg, (err) => {
+            d3.select("#runStatus").text("Error on sending display interval");
+        });
+    };
+    conn.onerror = function (error) {
+        d3.select("#runStatus").text("Error on opening connection " + error.toString());
+    };
+    conn.onmessage = function (msg) {
+        d3.select("#runStatus").text("Receiving next interval");
+        cliInput(msg.data);
+        if(getInterval() != chunkInterval) {
+            chunkInterval = getInterval();
+            let msg = "timespan " + (chunkInterval * 1000).toString();
+            conn.send(msg, (err) => {
+                d3.select("#runStatus").text("Error on sending updated display interval");
+            });
+        }
+    };
 </script>
 </body>
 </html>

@@ -25,6 +25,7 @@ The `web` directory contains an example file, ppvizEX.txt.
 ## See Also
 
 `pping` at https://github/pollere/pping.
+`line2Chunk` at https://github/pollere/line2Chunk.
 
 ## Author
 
@@ -32,6 +33,6 @@ Kathleen Nichols <nichols@pollere.net>.
 
 ## Copyright
 
-Copyright (c) 2017, Kathleen Nichols <nichols@pollere.net>.
+Copyright (c) 2017-8, Kathleen Nichols <nichols@pollere.net>.
 
 Licensed under the GNU GPLv3. See LICENSE for more details.

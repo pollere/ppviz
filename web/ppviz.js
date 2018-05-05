@@ -35,6 +35,7 @@ let statInterval;       //seconds into the past for short-term boxes,
 let newDispInt;
 let svg, boxg;
 let xScale, yScale, xAxis;
+let pipeData = false;
 let popped = [];
 let popHt = +0;
 let laneNm = [];	    //lane's flow name by id number
@@ -54,6 +55,7 @@ let selectStreams = false;      //indicator for a sorted dispList or check box s
 let plotDiv = document.getElementById("plot");
 let stripLast;		    //last time strip chart was updated
 let pauseStrip = false;
+let pipeDisp = true;
 let stripSp = 0.03;
 let stripSubMax = 6;
 
@@ -315,7 +317,7 @@ function stripChart() {
 	    alert("No record for flow" + f);
 	    return;
     }
-    if(flows[f].strip >= 0) {	    //already being displayed
+    if(flows[f].dtrace >= 0) {	    //already being displayed
 	    return;
     }
     if(subs >= stripSubMax)      //current limit on subplots
@@ -339,7 +341,7 @@ function stripChart() {
     popHt = popHt > popHtMin ? popHt : popHtMin;
     d3.select("#closer").append("svg")
 	    .attr("height", popHt)
-        .attr("width", margin.right/2)
+        .attr("width", margin.right)
         .style("pointer-events", "all")
 	    .append("rect")
 	    .attr("x", 0)
@@ -375,6 +377,27 @@ function stripChart() {
         .text("||")
         .style("pointer-events", "none")
         .style("text-anchor", "middle");
+    if(pipeData) {
+        d3.select("#closer svg")
+	        .append("rect")
+	        .attr("x", 0)
+	        .attr("y", popHt-20)
+	        .attr("height", 20)
+            .attr("width", 40)
+            .style("fill", "gray")
+            .style("pointer-events", "all")
+	        .on("click", toggleBytes);
+        d3.select("#closer svg")
+	        .append("text")
+            .attr("id", "bytes")
+	        .attr("x", 1)
+	        .attr("y", popHt-7)
+            .attr("font-size", "8pt")
+            .attr("stroke", "black")
+            .text("no bytes")
+            .style("pointer-events", "none")
+            .style("text-anchor", "left");
+    }
     let layout = {
 	    autosize: false,
         dragmode: "pan",
@@ -382,7 +405,7 @@ function stripChart() {
 	    legend: { "orientation": "h" },
 	    height: popHt,
 	    width: width+margin.left,
-	    margin: { l: 60, r: 0, b: 25, t: 5, pad: 0 },
+	    margin: { l: 60, r: 30, b: 25, t: 5, pad: 0 },
 //	    paper_bgcolor: "#c7c7c7",
 	    plot_bgcolor: "lightgray",
 	    textfont: {family:"Helvetica", size: 8 },
@@ -405,9 +428,10 @@ let svR = [];       //stripchart vertical range for each subplot
 svR[0] = [2];       //needs to be defined
 let spF = [];       //subplot flows
 let subs = +0;      //stripchart subplots
+let bvR = [];
+bvR[0] = 0;
 
 function setUpFlow(f) {
-    flows[f].strip = popped.length;     //get trace id
     popped.push(f);
     let c = 1;                          //color id number
     if(flows[f].side < 0)
@@ -429,9 +453,36 @@ function setUpFlow(f) {
 	    y: r,
 	    name: f,
 	    mode: "lines+markers",
-	    type: "scattergl",
+	    type: "scatter",
 	    textfont: { family:"Helvetica", size: 8 },
 	    textposition: "bottom center",
+	    line: { color: lineColor[c], width: 1}
+    };
+}
+
+function setUpFlowBytes(f) {
+    let c = 1;                          //color id number
+    if(flows[f].side < 0)
+        c = 0;
+    //pass all the points in history to the chart trace
+    let tm = [], p = [];
+    rtts[f].forEach(obj => {
+        if (obj.t <= stripLast && obj.p) {
+            tm.push(t2d(obj.t));
+            p.push(obj.p);
+            bvR[subs].push(obj.p);       // cdf
+        }
+    });
+    return {
+	    x: tm,
+	    y: p,
+	    name: f + "-bytes",
+	    mode: "lines+markers",
+	    type: "scatter",
+	    textfont: { family:"Helvetica", size: 8 },
+	    textposition: "bottom center",
+        opacity: 0.5,
+        visible: (pipeDisp? true : false),
 	    line: { color: lineColor[c], width: 1}
     };
 }
@@ -445,61 +496,70 @@ function addStripStream(f) {
     }
     let sp = ++subs;
     spF[sp] = [2];
+    svR[sp] = [2];
     let data = [];
-    data[0] = setUpFlow(f);
-    data[0]["xaxis"] = "x";
-    let xr = [t2d(stripLast-statInterval),t2d(stripLast)];
     let annot = [];
-
+    let xr = [t2d(stripLast-statInterval),t2d(stripLast)];
+    data[0] = setUpFlow(f);
+    let tid = flows[f].dtrace = plotDiv.data.length;     //trace id
+    data[0]["xaxis"] = "x";
     let ya = "yaxis";
-    let yd = "y";
-    if(sp > 1) { //naming of first subplot is different
-        yd = "y" + sp;
-    }
+    //naming of first subplot axis is different
+    //if plotting pipeData, yaxis numbering is different
+    let yd = sp > 1 ? "y" + (sp + pipeData*(sp-1)) : "y";
     data[0][ya] = yd;
     let layout = {};
-    for(let j=1; j < subs; ) { //layout of previous stream subplots
+    for(let j=1; j < subs; ) { //adjust domain of all subplots
         if(j===1) {
             layout[ya + ".domain"] = [0,(1.0/subs - stripSp)];
         } else {
             layout[ya + ".domain"] = [(j-1)/subs,(j/subs - stripSp)];
         }
         j++;
-        ya = "yaxis" + j;
+        ya = "yaxis" + (j + pipeData*(j-1));
     }
+    let d = 1;              //number of data traces being added
     //set vertical range and check for reverse flow
-    svR[sp] = [2];
     svR[sp][0] = 0.98*qdist[f].percentile(0.0);
     svR[sp][1] = qdist[f].percentile(0.98);
     let n = revFlow(f);
     if(flows[n]) {     //if there's a reverse flow, use in vertical range
-        data[1] = setUpFlow(n);
-        data[1]["yaxis"] = yd;
+        data[d] = setUpFlow(n);
+        flows[n].dtrace = tid + d;     //trace id
+        data[d]["yaxis"] = yd;
+        d++;
         if(qdist[n].percentile(0.) < svR[sp][0])
             svR[sp][0] = 0.98*qdist[n].percentile(0.);
         if(qdist[n].percentile(0.98) > svR[sp][1])
             svR[sp][1] = qdist[n].percentile(0.98);
     }
-    //set up layout of this subplot
+    if(svR[sp][0] < 0.)
+        svR[sp][0] = 0.;    //in case of rounding issues
+    //set up layout of this subplot, delay side
     layout[ya] = {  rangemode: "nonnegative",
                     title: "RTT (ms)",
                     titlefont: {family:"Helvetica", size: 12 },
                     domain: [((subs-1)/subs),1-stripSp],
                     range: svR[sp]
                   };
+
+    let a = 0;      //counts number of annotations (separate flows)
     if(sp > 1) {
         annot = plotDiv.layout.annotations.map(a => Object.assign({}, a));
         //move the annotation for all the prior subplots
         for(let i=0; i<plotDiv.data.length; i++) {
+            if(plotDiv.data[i].name.split("-").length > 1)
+                continue;
             let k = plotDiv.data[i]["yaxis"].split("");
             let ypos = 1/subs;
             if(k.length === 2)      //assuming # of subplots <=9
                 ypos = (+k[1])/subs;
-            annot[i]["y"] = ypos;
+            annot[a++]["y"] = ypos;
         }
     }
+    //add annotations for the new delay trace(s)
     for(let i=0; i<data.length; i++) {
-        annot[plotDiv.data.length+i] = { 
+        annot[a++] = { 
             xref: "paper",
             yref: "paper",
             x: i*0.25,
@@ -515,6 +575,7 @@ function addStripStream(f) {
         };
     }
     layout["annotations"] = annot;
+    //lines at bottom of each y-axis for multiple subplots
     if(sp > 1) {
         let xlines = [];
         for(let i=1; i<sp; i++) {
@@ -534,6 +595,35 @@ function addStripStream(f) {
         }
         layout["shapes"] = xlines;
     }
+
+    if(pipeData) {      //check if bytes in pipe is being displayed
+        if(bvR[sp])
+            delete bvR[sp];
+        bvR[sp] = new Digest();
+        data[d] = setUpFlowBytes(f);
+        flows[f].btrace = tid + d;     //trace id
+        data[d++]["yaxis"] = "y" + (2*sp);
+        if(flows[n])    {
+            data[d] = setUpFlowBytes(n);
+            flows[n].btrace = tid + d;     //trace id
+            data[d++]["yaxis"] = "y" + (2*sp);
+        }
+        //set up layout of this subplot, bytes side
+        ya = "yaxis" + (2*sp);
+        layout[ya] = {  rangemode: "nonnegative",
+                        range: [0, bvR[sp].percentile(0.98)],
+                        title: (pipeDisp? "pipe bytes (KB)" : ""),
+                        titlefont: {family:"Helvetica", size: 12 },
+                        overlaying: yd,
+                        showgrid: false,
+                        zeroline: false,
+                        showticklabels: (pipeDisp? true : false),
+//                          gridcolor: "white",
+//                          gridwidth: 1,
+                        side: "right"
+                        };
+    }
+
     Plotly.relayout('plot', layout);    //adds the new subplot to layout
 	Plotly.addTraces ('plot', data);    //add data for new stream
 
@@ -587,27 +677,36 @@ function updateStrip(endTm) {
     let newx = [], newy = [], newid = [];
     for (const f of popped) {
         const rtt = rtts[f];
+        let sp = flows[f].sp;
 	    if(!rtt || rtt.length===0 || rtt[rtt.length-1].t <= stripLast) {
 		    continue;	//no new points, no update
         }
-        let r = [], tm = [];
+        let r = [], tm = [], p = [];
         for (const obj of rtt) {
             if (obj.t > stripLast && obj.t <= endTm) {
                 r.push(obj.r);
                 tm.push(t2d(obj.t));
+                if(obj.p) {
+                    p.push(obj.p);
+                    bvR[sp].push(obj.p);
+                }
             }
         }
         if (r.length === 0) {
             continue;
         }
         newpts += r.length;
-        newx.push(tm); newy.push(r); newid.push(flows[f].strip);
+        newx.push(tm); newy.push(r); newid.push(flows[f].dtrace);
         //set vertical range to go from smallest min to largest 98th of subplot's traces
-        let sp = flows[f].sp;
         if (qdist[f].percentile(0.0) < svR[sp][0])
             svR[sp][0] = qdist[f].percentile(0.);
         if(qdist[f].percentile(0.98) > svR[sp][1])
             svR[sp][1] = qdist[f].percentile(0.98);
+        if(svR[sp][0] < 0.)
+            svR[sp][0] = 0.;
+        if(p.length != 0) {     //check for volume data
+            newx.push(tm); newy.push(p); newid.push(flows[f].btrace);
+        }
     }
     if(newpts === 0) {
         return;     //the plot stops moving if no new points
@@ -620,8 +719,13 @@ function updateStrip(endTm) {
     layout["xaxis.range"] = xr;
     let ya = "yaxis";
     for(let i=+1; i<=subs; ) {   //set up range changes for each subplot
-        layout[ya + ".range"] = svR[i++];
-        ya = "yaxis" + i;
+        layout[ya + ".range"] = svR[i];
+        if(pipeData) {
+            ya = "yaxis" + (i + pipeData*i);
+            layout[ya + ".range"] = [0, bvR[i].percentile(0.98)];
+        }
+        i++;
+        ya = "yaxis" + (i + pipeData*(i-1));
     }
 	Plotly.relayout ('plot', layout);
 }
@@ -636,13 +740,52 @@ function togglePause() {
     }
 }
 
+function toggleBytes() {
+    if(pipeDisp == true) {
+        pipeDisp = false;
+        d3.select("#bytes").text("bytes");
+        //make byte traces invisible
+        for(let i=0; i<popped.length; i++) {
+            let j = flows[popped[i]].btrace;
+            plotDiv.data[j].visible = false;
+            //make byte axis title invisible
+            j = flows[popped[i]].sp;
+            let y = "yaxis" + 2*j;
+            plotDiv.layout[y].showticklabels = false;
+            plotDiv.layout[y].title = "";
+        }
+        //make byte axis title invisible
+    } else {
+        pipeDisp = true;
+        d3.select("#bytes").text("no bytes");
+        //make byte traces visible
+        for(let i=0; i<popped.length; i++) {
+            let j = flows[popped[i]].btrace;
+            plotDiv.data[j].visible = true;
+            //make byte axis title visible
+            j = flows[popped[i]].sp;
+            let y = "yaxis" + 2*j;
+            plotDiv.layout[y].showticklabels = true;
+            plotDiv.layout[y].title = "pipe bytes (KB)";
+        }
+    }
+	Plotly.relayout (plotDiv, plotDiv.layout);
+}
+
 function removeStripChart() {
     if(!plotDiv.children.length)
 	    return;
     //this removes all the traces in one command
     let ids = [];
-    for(let i=+0; i<popped.length; i++)
-	    ids.push(flows[popped[i]].strip);
+    for(let i=+0; i<popped.length; i++) {
+        let f = flows[popped[i]];
+	    ids.push(f.dtrace);
+        if(f.btrace > 0)
+	        ids.push(f.btrace);
+    	f.dtrace = -1;
+    	f.btrace = -1;
+    }
+    popped = [];
     Plotly.deleteTraces ('plot', ids);
     //mysteriously, this seems to do away with the t.emit errors
         //while Plotly.purge() does not
@@ -650,26 +793,32 @@ function removeStripChart() {
     d3.select("#plot").html(null);      //Plotly.purge is buggy so do this
     d3.select("#closer svg").remove();
     //removes all the trace info from flows and popped list
-    while( popped.length ) {
-    	let f = popped.shift();
-    	flows[f].strip = -1;
-    }
     popHt = 0;
     subs = 0;
 }
 
 //removes a single flow
 function removeStripFlow(f) {
-    let id = flows[f].strip;
-    flows[f].strip = -1;
-    Plotly.deleteTraces ('plot', id);
+    let ids = [];
+    ids.push(flows[f].dtrace);
+    flows[f].dtrace = -1;
+    if(flows[f].btrace > 0) {
+        ids.push(flows[f].btrace);
+        flows[f].btrace = -1;
+    }
+    Plotly.deleteTraces ('plot', ids);
     //remove this flow from the list
     popped.splice(popped.indexOf(f), 1);
     //Plotly apparently changes indices so also change ids to match
     let i;
-    for(i=0; i<popped.length; i++)
-	    flows[popped[i]].strip = i;
-    for(i=id; i<plotDiv.layout.annotations.length-1; i++)
+    for(i=0; i<plotDiv.data.length; i++) {
+        let f = plotDiv.data[i].name.split("-");
+        if(f.length > 1)
+            flows[f[0]].btrace = i;
+        else
+            flows[f[0]].dtrace = i;
+    }
+    for(i=ids[0]; i<plotDiv.layout.annotations.length-1; i++)
         plotDiv.layout.annotations[i] = plotDiv.layout.annotations[i+1];
     plotDiv.layout.annotations[i] = {};
     //plotly resizes itself after deleting last trace so need to fix
@@ -685,13 +834,20 @@ function removeStripStream(sp) {
         removeStripChart();
         return;
     }
-    for(let i=0; i<2; i++) {
+    for(let i=0; i<2; i++) {        //both directions of stream
         let f = spF[sp][i];
         if(flows[f]) {
-            removeStripFlow(f);
+            removeStripFlow(f);     //removes f's traces
         }
+        if(bvR[sp])
+            delete bvR[sp];
     }
+    //Plotly does not remove this, so need to help
+    d3.selectAll(".g-y"+(subs+pipeData*subs)+"title").remove();
+    d3.selectAll(".g-y"+(subs+pipeData*(subs-1))+"title").remove();
+
     let layout = {};
+    let annot = [];
     //subplot sp is empty, recompute for subs-1 subplots
     for(let s=1; s<subs; s++) {
         //move subplots above sp down by 1
@@ -703,38 +859,43 @@ function removeStripStream(sp) {
             layout["yaxis.range"] = svR[1];
             layout["yaxis.domain"] = [0,(1/(subs-1) - stripSp)];
         } else {
-            layout["yaxis" + s + ".range"] = svR[s];
-            layout["yaxis" + s + ".domain"] = [(s-1)/(subs-1),(s/(subs-1) - stripSp)];
+            let j = s + pipeData*(s-1);
+            layout["yaxis" + j + ".range"] = svR[s];
+            layout["yaxis" + j + ".domain"] = [(s-1)/(subs-1),(s/(subs-1) - stripSp)];
+        }
+        //move all the subplot annotations and each trace's display axis
+        for(let i=0; i<2; i++) {
+            let f = flows[spF[s][i]];
+            if(f) {
+                f.sp = s;
+                plotDiv.data[f.dtrace].yaxis = "y" + (s + pipeData*(s-1));
+                if(f.btrace > 0)
+                    plotDiv.data[f.btrace].yaxis = "y" + (s + pipeData*s);
+                annot[2*(s-1)+i] = { 
+                    xref: "paper",
+                    yref: "paper",
+                    x: i*0.25,
+                    xanchor: "left",
+                    y: s/(subs-1),  //subs >= 2 so can't divide by 0
+                    yanchor: "top",
+                    text: spF[s][i],
+                    font: { family: "Helvetica",
+                            size: 12,
+                            color: lineColor[i]
+                        },
+                    showarrow: false
+                };
+            }
         }
     }
-    //remove subplot subs 
-    layout["yaxis" + subs] = {};
-    delete spF[subs];
-    //remove empty objects from annotate and move yposition of labels
-    let annot = [];
-    plotDiv.layout.annotations.forEach(obj => { //possibly more trouble than worth
-            if(Object.keys(obj).length != 0)
-                annot.push(Object.assign({}, obj));
-        });
-    //move all the subplot annotations and each trace's display axis
-    for(let i=0; i<plotDiv.data.length; i++) {      //stuff to do for each trace/flow
-        let s = 1;
-        let k = plotDiv.data[i]["yaxis"].split("");
-        if(k.length === 2) {      //assuming # of subplots <=9
-            s = +k[1];
-            plotDiv.data[i].yaxis = "y" + s;
-        } else
-            plotDiv.data[i].yaxis = "y";
-        if(s > sp) {
-            if(--s > 1)
-                plotDiv.data[i].yaxis = "y" + s;
-            else
-                plotDiv.data[i].yaxis = "y";
-            flows[plotDiv.data[i]["name"]].sp--;
-        }
-        annot[i]["y"] = s/(subs-1);  //subs >= 2 so can't divide by 0
-    }
+
+    //clear subplot subs layout
+    if(pipeData)
+        layout["yaxis" + 2*subs] = {};
+    layout["yaxis" + (subs + pipeData*(subs-1))] = {};
     layout["annotations"] = annot;
+    delete spF[subs];
+
     //remove and move xlines
     let xlines = [];
     if(subs > 2) {
@@ -893,14 +1054,14 @@ function mungeData(endtm) {
             continue;
         if (flows[k].side === 0)
             flows[k].side = srcSide(flows[k].src, flows[k].dst);
-       //ewma of number of points in this interval
+        //ewma of number of points in this interval
         let c = flows[k].pts;
         if(c > 0)
-            c = 0.5*(sts[k].size() + flows[k].pts);
+            c = 0.5*(sts[k].size() + c);
         else
             c = sts[k].size();
         c = Math.round(c);
-        flows[k].pts = c;
+	    flows[k].pts = c;
 	    dispCnt += c;
         cntd[k] = 1;
         //have to save this information in case of redraws
@@ -927,10 +1088,8 @@ function mungeData(endtm) {
         else
             cr = sts[n].size();
         cr = Math.round(cr);
-        flows[n].pts = cr;
-        dispCnt += cr;
-	    dispCnt += sts[n].size();
-	    flows[n].pts = sts[n].size();
+	    flows[n].pts = cr;
+	    dispCnt += cr;
         flows[n].q = [
             sts[n].percentile(0.05),
             sts[n].percentile(0.25),
@@ -938,10 +1097,10 @@ function mungeData(endtm) {
             sts[n].percentile(0.75),
             sts[n].percentile(0.95)
             ];
-        c += cr;        //pts in stream
+        c += cr;    //pts in stream
         cntd[n] = 1;
         	cntVal.push({
-            	c: c,
+                c: c,
             	n: k
         	});
         if (flows[n].side === 0)
@@ -1430,7 +1589,8 @@ function ppLine(line) {
             dst: d,
             side: 0,
 	        pts: +0,
-	        strip: -1,              //for trace index
+	        dtrace: -1,              //for delay trace index
+	        btrace: -1,              //for bytes trace index
 	        sp: +0,                 //for subplot id
         	q: [0, 0, 0, 0, 0]
         };
@@ -1440,6 +1600,11 @@ function ppLine(line) {
         sts[key] = new Digest();
     } else {
         flows[key].lstTm = v.t;
+    }
+    if(rec.length === 7) {
+        pipeData = true;
+//        v.p = (rec[3] - rec[4])/1000.;   //volume of data in pipe in kbytes
+        v.p = (rec[3] - rec[4] + rec[5])/1000.;   //volume of data in pipe in kbytes
     }
     rtts[key].push(v);
     qdist[key].push(v.r);       //rtt in ms
@@ -1487,7 +1652,7 @@ function cleanUp(now) {
     //remove old values before display
     for (let k in flows) {
         if (now - flows[k].lstTm > maxIdle) {
-            if(flows[k].strip >= 0) {
+            if(flows[k].trace >= 0) {
                 if(flows[revFlow(k)])           //if still a reverse flow
                     removeStripFlow(k);         //flow record is vanishing
                 else
@@ -1790,6 +1955,11 @@ function changeLanes(cl) {
     resizeMap();
 }
 
+function getInterval() {
+    return updateInterval;
+}
+
+//changes the updateInterval when it is changed in GUI
 function changeInterval(ni) {
     updateInterval = +ni;
     if(updateInterval > ptHistory) {
@@ -1841,6 +2011,17 @@ async function ppvizManager() {
 
     //otherwise just exits and waits
     d3.select("#runStatus").text("Push next button to advance");
+}
+
+// for input piped from node pipeServer.js, using ppvizCLI.html
+//      should be using -m so input is in seconds
+function cliInput(chnk) {
+    d3.select("#runStatus").text("Processing next message interval");
+        let lines = chnk.split(/^/m);
+        for(let i=0; i<lines.length; i++) {
+            ppLine(lines[i]);
+        }
+        processInterval(lines[lines.length-1].split(' ')[0]);
 }
 
 //Sets up canvas.
