@@ -18,6 +18,10 @@ browser, either directly or by using a local web server. The
 ppviz page lets you chose a previously saved `pping -m` output
 for analysis.
 
+To invoke `ppviz` on a live pping, first get the line2Chunk nodejs
+program. Then, from the command line, `pping -m -i [interface] | node line2Chunk.js`
+and from a browser window open ppvizCLI.html (or open on command line).
+
 ## Examples
 
 The `web` directory contains an example file, ppvizEX.txt.
