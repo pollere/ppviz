@@ -28,8 +28,8 @@ The `web` directory contains an example file, ppvizEX.txt.
 
 ## See Also
 
-`pping` at https://github/pollere/pping.
-`line2Chunk` at https://github/pollere/line2Chunk.
+`pping` at https://github.com/pollere/pping.
+`line2Chunk` at https://github.com/pollere/line2Chunk.
 
 ## Author
 
